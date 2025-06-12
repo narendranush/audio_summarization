@@ -1,0 +1,13 @@
+[server]
+port = 8502
+
+[browser]
+gatherUsageStats = false
+serverAddress = "0.0.0.0"
+serverPort = 8502
+
+[theme]
+base = "light"
+primaryColor = "#0772BA" # custom color
+
+
