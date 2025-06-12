@@ -50,7 +50,7 @@ uv pip install .
 ### 3. Run the App
 
 ```bash
-streamlit run app.py
+streamlit run main.py
 ```
 
 ---
