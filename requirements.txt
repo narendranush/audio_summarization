@@ -1,0 +1,7 @@
+faster-whisper
+librosa
+pydub
+streamlit
+torch
+transformers
+yt-dlp
