@@ -95,7 +95,24 @@ class Utils:
                     'preferredquality': '192',
                 }],
                 'outtmpl': output_path_no_ext,
-                'quiet': True
+                'quiet': True,
+                'cookiesfrombrowser': ('chrome',),
+                'extract_flat': True,
+                'ignoreerrors': True,
+                'no_warnings': True,
+                'nocheckcertificate': True,
+                'no_color': True,
+                'prefer_insecure': True,
+                'geo_bypass': True,
+                'geo_verification_proxy': None,
+                'skip_download_archive': True,
+                'extractor_args': {
+                    'youtube': {
+                        'skip': ['dash', 'hls'],
+                        'player_client': ['android', 'web'],
+                        'player_skip': ['js', 'configs', 'webpage'],
+                    }
+                }
             }
 
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
