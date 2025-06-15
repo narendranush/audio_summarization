@@ -1,72 +1,100 @@
-from flask import Flask, render_template, request, jsonify
+import streamlit as st
+import requests
+import tempfile
 import os
 from backend import Utils, Generation
 
-app = Flask(__name__)
-app.config['UPLOAD_FOLDER'] = 'uploads'
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
+def main():
+    st.set_page_config(
+        page_title="Financial Audio Summarization",
+        page_icon="🗣️",
+    )
 
-# Ensure upload folder exists
-os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+    # Hide Streamlit's default header and footer
+    hide_decoration_bar_style = """<style>header {visibility: hidden;}</style>"""
+    st.markdown(hide_decoration_bar_style, unsafe_allow_html=True)
+    hide_streamlit_footer = """
+    <style>#MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}</style>
+    """
+    st.markdown(hide_streamlit_footer, unsafe_allow_html=True)
 
-@app.route('/')
-def index():
-    return render_template('index.html')
+    st.title("🗣️ Financial Audio Summarization")
+    st.markdown("Upload an audio file or provide a YouTube link to transcribe and summarize its content")
 
-@app.route('/process', methods=['POST'])
-def process_audio():
-    try:
-        if 'audio_file' in request.files:
-            audio_file = request.files['audio_file']
-            if audio_file.filename == '':
-                return jsonify({'error': 'No file selected'}), 400
-            
-            if not audio_file.filename.endswith('.wav'):
-                return jsonify({'error': 'Please upload a WAV file'}), 400
+    # Create tabs for different input methods
+    tab1, tab2 = st.tabs(["Audio File", "YouTube Link"])
 
-            # Save the file temporarily
-            temp_path = Utils.temporary_file(audio_file.read())
-            
-            # Process the audio
-            generation = Generation()
-            transcription = generation.transcribe_audio_pytorch(temp_path)
-            summary = generation.summarize_string(transcription)
-            
-            # Clean up
-            os.remove(temp_path)
-            
-            return jsonify({
-                'transcription': transcription,
-                'summary': summary
-            })
+    with tab1:
+        uploaded_file = st.file_uploader(
+            "Choose a WAV audio file",
+            type=["wav"],
+            help="Upload an audio file for transcription and summarization."
+        )
+        if uploaded_file is not None:
+            st.audio(uploaded_file, format="audio/wav")
+            if st.button("Process Audio File", key="process_file"):
+                with st.spinner("Processing audio file..."):
+                    # Save the file temporarily
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_file:
+                        temp_file.write(uploaded_file.read())
+                        temp_path = temp_file.name
 
-        elif 'youtube_url' in request.form:
-            youtube_url = request.form['youtube_url']
-            if not youtube_url:
-                return jsonify({'error': 'No YouTube URL provided'}), 400
+                    try:
+                        # Process the audio
+                        generation = Generation()
+                        transcription = generation.transcribe_audio_pytorch(temp_path)
+                        summary = generation.summarize_string(transcription)
 
-            # Download and process YouTube audio
-            temp_path = Utils.download_youtube_audio_to_tempfile(youtube_url)
-            if not temp_path:
-                return jsonify({'error': 'Failed to download YouTube audio'}), 400
+                        # Display results
+                        with st.expander("Transcription", expanded=True):
+                            st.text_area("", transcription, height=300)
+                        
+                        with st.expander("Summary", expanded=True):
+                            st.text_area("", summary, height=300)
 
-            # Process the audio
-            generation = Generation()
-            transcription = generation.transcribe_audio_pytorch(temp_path)
-            summary = generation.summarize_string(transcription)
-            
-            # Clean up
-            os.remove(temp_path)
-            
-            return jsonify({
-                'transcription': transcription,
-                'summary': summary
-            })
+                        # Clean up
+                        os.remove(temp_path)
+                    except Exception as e:
+                        st.error(f"Error processing audio: {str(e)}")
+                        if os.path.exists(temp_path):
+                            os.remove(temp_path)
 
-        return jsonify({'error': 'No valid input provided'}), 400
+    with tab2:
+        youtube_url = st.text_input(
+            "Enter YouTube URL",
+            placeholder="https://www.youtube.com/watch?v=...",
+            help="Paste the YouTube link of the video you want to summarize."
+        )
+        if youtube_url:
+            st.video(youtube_url)
+            if st.button("Process YouTube Video", key="process_youtube"):
+                with st.spinner("Processing YouTube video..."):
+                    try:
+                        # Download and process YouTube audio
+                        temp_path = Utils.download_youtube_audio_to_tempfile(youtube_url)
+                        if not temp_path:
+                            st.error("Failed to download YouTube audio")
+                            return
 
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+                        # Process the audio
+                        generation = Generation()
+                        transcription = generation.transcribe_audio_pytorch(temp_path)
+                        summary = generation.summarize_string(transcription)
 
-if __name__ == '__main__':
-    app.run(debug=True) 
+                        # Display results
+                        with st.expander("Transcription", expanded=True):
+                            st.text_area("", transcription, height=300)
+                        
+                        with st.expander("Summary", expanded=True):
+                            st.text_area("", summary, height=300)
+
+                        # Clean up
+                        os.remove(temp_path)
+                    except Exception as e:
+                        st.error(f"Error processing YouTube video: {str(e)}")
+                        if temp_path and os.path.exists(temp_path):
+                            os.remove(temp_path)
+
+if __name__ == "__main__":
+    main() 
