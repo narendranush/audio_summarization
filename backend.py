@@ -5,7 +5,10 @@ import os
 import torch
 import torchaudio
 import yt_dlp
+from flask import Flask, request, jsonify
 from transformers import AutoProcessor, AutoModelForSpeechSeq2Seq, pipeline, AutoTokenizer
+
+app = Flask(__name__)
 
 class Utils:
     @staticmethod
@@ -189,4 +192,62 @@ class Generation:
             )
             return summary[0]['summary_text']
         except Exception as e:
-            return f"Error: {e}" 
+            return f"Error: {e}"
+
+# Flask API endpoints
+@app.route('/api/process-audio', methods=['POST'])
+def process_audio():
+    try:
+        if 'audio_file' in request.files:
+            audio_file = request.files['audio_file']
+            if audio_file.filename == '':
+                return jsonify({'error': 'No file selected'}), 400
+            
+            if not audio_file.filename.endswith('.wav'):
+                return jsonify({'error': 'Please upload a WAV file'}), 400
+
+            temp_path = Utils.temporary_file(audio_file.read())
+            
+            generation = Generation()
+            transcription = generation.transcribe_audio_pytorch(temp_path)
+            summary = generation.summarize_string(transcription)
+            
+            os.remove(temp_path)
+            
+            return jsonify({
+                'transcription': transcription,
+                'summary': summary
+            })
+
+        return jsonify({'error': 'No valid input provided'}), 400
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/process-youtube', methods=['POST'])
+def process_youtube():
+    try:
+        youtube_url = request.json.get('youtube_url')
+        if not youtube_url:
+            return jsonify({'error': 'No YouTube URL provided'}), 400
+
+        temp_path = Utils.download_youtube_audio_to_tempfile(youtube_url)
+        if not temp_path:
+            return jsonify({'error': 'Failed to download YouTube audio'}), 400
+
+        generation = Generation()
+        transcription = generation.transcribe_audio_pytorch(temp_path)
+        summary = generation.summarize_string(transcription)
+        
+        os.remove(temp_path)
+        
+        return jsonify({
+            'transcription': transcription,
+            'summary': summary
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+if __name__ == '__main__':
+    app.run(debug=True, port=5000) 
