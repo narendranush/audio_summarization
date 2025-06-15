@@ -141,8 +141,20 @@ class Generation:
     ):
         self.summarization_model = summarization_model
         self.speech_to_text_model = speech_to_text_model
-        self.device = "cuda:0" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
-        self.dtype = torch.float16 if self.device != "cpu" else torch.float32
+        
+        # Enhanced GPU detection and setup
+        if torch.cuda.is_available():
+            self.device = "cuda"
+            torch.cuda.empty_cache()  # Clear GPU memory
+            print(f"✅ Using GPU: {torch.cuda.get_device_name(0)}")
+            print(f"✅ GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.2f} GB")
+        else:
+            self.device = "cpu"
+            print("⚠️ No GPU available, using CPU")
+        
+        self.dtype = torch.float16 if self.device == "cuda" else torch.float32
+        
+        # Load models with GPU optimization
         self.processor_speech = AutoProcessor.from_pretrained(speech_to_text_model)
         self.model_speech = AutoModelForSpeechSeq2Seq.from_pretrained(
             speech_to_text_model,
@@ -151,6 +163,12 @@ class Generation:
             use_safetensors=True,
             attn_implementation="eager",
         ).to(self.device)
+        
+        # Enable model optimization for GPU
+        if self.device == "cuda":
+            self.model_speech = self.model_speech.half()  # Use FP16
+            torch.cuda.empty_cache()  # Clear GPU memory after model load
+        
         self.summarization_tokenizer = AutoTokenizer.from_pretrained(summarization_model)
 
     def transcribe_audio_pytorch(self, file_path: str) -> str:
@@ -164,13 +182,14 @@ class Generation:
             print("❌ Audio too short to process.")
             return ""
 
+        # Optimize pipeline for GPU
         pipe = pipeline(
             "automatic-speech-recognition",
             model=self.model_speech,
             tokenizer=self.processor_speech.tokenizer,
             feature_extractor=self.processor_speech.feature_extractor,
             chunk_length_s=5,
-            batch_size=1,
+            batch_size=4 if self.device == "cuda" else 1,  # Larger batch size for GPU
             return_timestamps=None,
             torch_dtype=self.dtype,
             device=self.device,
@@ -178,8 +197,17 @@ class Generation:
         )
 
         try:
+            # Clear GPU memory before processing
+            if self.device == "cuda":
+                torch.cuda.empty_cache()
+            
             hf_pipeline_output = pipe(converted_path)
             print("✅ HF pipeline output:", hf_pipeline_output)
+            
+            # Clear GPU memory after processing
+            if self.device == "cuda":
+                torch.cuda.empty_cache()
+                
             return hf_pipeline_output.get("text", "")
         except Exception as e:
             print("❌ Pipeline failed with error:", e)
@@ -189,17 +217,30 @@ class Generation:
         """
         Summarize the input text using the summarization model.
         """
-        summarizer = pipeline("summarization", model=self.summarization_model, tokenizer=self.summarization_model)
+        summarizer = pipeline(
+            "summarization", 
+            model=self.summarization_model, 
+            tokenizer=self.summarization_model,
+            device=self.device,
+            torch_dtype=self.dtype
+        )
         try:
             if len(text.strip()) < 10:
                 return ""
 
             inputs = self.summarization_tokenizer(text, truncation=True, max_length=512, return_tensors="pt")
+            if self.device == "cuda":
+                inputs = {k: v.to(self.device) for k, v in inputs.items()}
+            
             truncated_text = self.summarization_tokenizer.decode(inputs["input_ids"][0], skip_special_tokens=True)
 
             word_count = len(truncated_text.split())
             min_len = max(int(word_count * 0.5), 30)
             max_len = max(min_len + 20, int(word_count * 0.75))
+
+            # Clear GPU memory before summarization
+            if self.device == "cuda":
+                torch.cuda.empty_cache()
 
             summary = summarizer(
                 truncated_text,
@@ -207,6 +248,11 @@ class Generation:
                 min_length=min_len,
                 do_sample=False
             )
+            
+            # Clear GPU memory after summarization
+            if self.device == "cuda":
+                torch.cuda.empty_cache()
+                
             return summary[0]['summary_text']
         except Exception as e:
             return f"Error: {e}"
