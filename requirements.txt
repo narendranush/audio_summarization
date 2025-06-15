@@ -6,3 +6,4 @@ yt-dlp
 soundfile
 numpy
 pandas 
+streamlit
