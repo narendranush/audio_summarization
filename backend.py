@@ -227,26 +227,50 @@ def process_audio():
 @app.route('/api/process-youtube', methods=['POST'])
 def process_youtube():
     try:
-        youtube_url = request.json.get('youtube_url')
+        # Get the request data
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No JSON data received'}), 400
+
+        youtube_url = data.get('youtube_url')
         if not youtube_url:
             return jsonify({'error': 'No YouTube URL provided'}), 400
 
+        print(f"Processing YouTube URL: {youtube_url}")  # Debug log
+
+        # Download YouTube audio
         temp_path = Utils.download_youtube_audio_to_tempfile(youtube_url)
         if not temp_path:
             return jsonify({'error': 'Failed to download YouTube audio'}), 400
 
+        print(f"Downloaded audio to: {temp_path}")  # Debug log
+
+        # Process the audio
         generation = Generation()
         transcription = generation.transcribe_audio_pytorch(temp_path)
+        if not transcription:
+            return jsonify({'error': 'Failed to transcribe audio'}), 500
+
+        print(f"Transcription completed: {len(transcription)} characters")  # Debug log
+
         summary = generation.summarize_string(transcription)
-        
-        os.remove(temp_path)
-        
+        if not summary:
+            return jsonify({'error': 'Failed to generate summary'}), 500
+
+        print(f"Summary completed: {len(summary)} characters")  # Debug log
+
+        # Clean up
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+            print(f"Cleaned up temporary file: {temp_path}")  # Debug log
+
         return jsonify({
             'transcription': transcription,
             'summary': summary
         })
 
     except Exception as e:
+        print(f"Error in process_youtube: {str(e)}")  # Debug log
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
