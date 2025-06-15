@@ -4,6 +4,9 @@ import tempfile
 import os
 from backend import Utils, Generation
 
+# Backend API URL
+BACKEND_URL = "http://localhost:5000"
+
 def main():
     st.set_page_config(
         page_title="Financial Audio Summarization",
@@ -35,30 +38,26 @@ def main():
             st.audio(uploaded_file, format="audio/wav")
             if st.button("Process Audio File", key="process_file"):
                 with st.spinner("Processing audio file..."):
-                    # Save the file temporarily
-                    with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_file:
-                        temp_file.write(uploaded_file.read())
-                        temp_path = temp_file.name
-
                     try:
-                        # Process the audio
-                        generation = Generation()
-                        transcription = generation.transcribe_audio_pytorch(temp_path)
-                        summary = generation.summarize_string(transcription)
-
-                        # Display results
-                        with st.expander("Transcription", expanded=True):
-                            st.text_area("", transcription, height=300)
+                        # Prepare the file for API request
+                        files = {'audio_file': uploaded_file}
                         
-                        with st.expander("Summary", expanded=True):
-                            st.text_area("", summary, height=300)
-
-                        # Clean up
-                        os.remove(temp_path)
+                        # Make API call to backend
+                        response = requests.post(f"{BACKEND_URL}/api/process-audio", files=files)
+                        
+                        if response.status_code == 200:
+                            data = response.json()
+                            
+                            # Display results
+                            with st.expander("Transcription", expanded=True):
+                                st.text_area("", data['transcription'], height=300)
+                            
+                            with st.expander("Summary", expanded=True):
+                                st.text_area("", data['summary'], height=300)
+                        else:
+                            st.error(f"Error: {response.json().get('error', 'Unknown error')}")
                     except Exception as e:
                         st.error(f"Error processing audio: {str(e)}")
-                        if os.path.exists(temp_path):
-                            os.remove(temp_path)
 
     with tab2:
         youtube_url = st.text_input(
@@ -71,30 +70,25 @@ def main():
             if st.button("Process YouTube Video", key="process_youtube"):
                 with st.spinner("Processing YouTube video..."):
                     try:
-                        # Download and process YouTube audio
-                        temp_path = Utils.download_youtube_audio_to_tempfile(youtube_url)
-                        if not temp_path:
-                            st.error("Failed to download YouTube audio")
-                            return
-
-                        # Process the audio
-                        generation = Generation()
-                        transcription = generation.transcribe_audio_pytorch(temp_path)
-                        summary = generation.summarize_string(transcription)
-
-                        # Display results
-                        with st.expander("Transcription", expanded=True):
-                            st.text_area("", transcription, height=300)
+                        # Make API call to backend
+                        response = requests.post(
+                            f"{BACKEND_URL}/api/process-youtube",
+                            json={'youtube_url': youtube_url}
+                        )
                         
-                        with st.expander("Summary", expanded=True):
-                            st.text_area("", summary, height=300)
-
-                        # Clean up
-                        os.remove(temp_path)
+                        if response.status_code == 200:
+                            data = response.json()
+                            
+                            # Display results
+                            with st.expander("Transcription", expanded=True):
+                                st.text_area("", data['transcription'], height=300)
+                            
+                            with st.expander("Summary", expanded=True):
+                                st.text_area("", data['summary'], height=300)
+                        else:
+                            st.error(f"Error: {response.json().get('error', 'Unknown error')}")
                     except Exception as e:
                         st.error(f"Error processing YouTube video: {str(e)}")
-                        if temp_path and os.path.exists(temp_path):
-                            os.remove(temp_path)
 
 if __name__ == "__main__":
     main() 
