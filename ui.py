@@ -5,7 +5,7 @@ import os
 from backend import Utils, Generation
 
 # Backend API URL
-BACKEND_URL = "http://localhost:5000"
+BACKEND_URL = "http://151.106.112.219:5000"
 
 def main():
     st.set_page_config(
