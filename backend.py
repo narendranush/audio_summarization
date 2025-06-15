@@ -137,7 +137,8 @@ class Generation:
     def __init__(
             self, 
             summarization_model: str = "vian123/brio-finance-finetuned-v2",
-            speech_to_text_model: str = "nyrahealth/CrisperWhisper", 
+            speech_to_text_model: str = "litwhisper/litwhisper-large-v3",
+            # speech_to_text_model: str = "nyrahealth/CrisperWhisper",  # Original model
     ):
         self.summarization_model = summarization_model
         self.speech_to_text_model = speech_to_text_model
