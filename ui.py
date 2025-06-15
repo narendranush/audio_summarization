@@ -71,9 +71,11 @@ def main():
                 with st.spinner("Processing YouTube video..."):
                     try:
                         # Make API call to backend
+                        headers = {'Content-Type': 'application/json'}
                         response = requests.post(
                             f"{BACKEND_URL}/api/process-youtube",
-                            json={'youtube_url': youtube_url}
+                            json={'youtube_url': youtube_url},
+                            headers=headers
                         )
                         
                         if response.status_code == 200:
@@ -86,9 +88,15 @@ def main():
                             with st.expander("Summary", expanded=True):
                                 st.text_area("", data['summary'], height=300)
                         else:
-                            st.error(f"Error: {response.json().get('error', 'Unknown error')}")
+                            error_msg = response.json().get('error', 'Unknown error')
+                            st.error(f"Error: {error_msg}")
+                            print(f"Backend error: {error_msg}")  # Debug log
+                    except requests.exceptions.RequestException as e:
+                        st.error(f"Connection error: Could not connect to backend server. Make sure it's running on {BACKEND_URL}")
+                        print(f"Request error: {str(e)}")  # Debug log
                     except Exception as e:
                         st.error(f"Error processing YouTube video: {str(e)}")
+                        print(f"General error: {str(e)}")  # Debug log
 
 if __name__ == "__main__":
     main() 
